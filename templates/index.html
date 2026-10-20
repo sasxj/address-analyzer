@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Анализатор табличек с адресами</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+        }
+        
+        h1 { color: #333; margin-bottom: 10px; text-align: center; }
+        .subtitle { color: #666; text-align: center; margin-bottom: 30px; }
+        
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 12px;
+            padding: 50px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f8f9ff;
+        }
+        
+        .upload-area:hover, .upload-area.dragover {
+            background: #eef0ff;
+            border-color: #764ba2;
+        }
+        
+        .upload-icon { font-size: 48px; margin-bottom: 15px; }
+        .upload-text { font-size: 18px; color: #333; margin-bottom: 10px; }
+        .upload-hint { color: #888; font-size: 14px; }
+        #fileInput { display: none; }
+        
+        .progress-container { display: none; margin: 30px 0; }
+        .progress-bar {
+            width: 100%; height: 8px;
+            background: #e0e0e0; border-radius: 4px; overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%; transition: width 0.3s;
+        }
+        .progress-text { text-align: center; margin-top: 10px; color: #666; }
+        
+        .error {
+            background: #ffebee; color: #c62828;
+            padding: 15px; border-radius: 8px;
+            margin-top: 20px; display: none;
+        }
+        
+        .results { display: none; margin-top: 30px; }
+        
+        .stats { display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
+        .stat-card {
+            flex: 1; min-width: 150px;
+            padding: 20px; border-radius: 12px; text-align: center;
+            cursor: pointer; transition: transform 0.2s;
+            border: 3px solid transparent;
+        }
+        .stat-card:hover { transform: translateY(-3px); }
+        .stat-card.active { border-color: #333; }
+        
+        .stat-card.total { background: #e3f2fd; }
+        .stat-card.valid { background: #e8f5e9; }
+        .stat-card.invalid { background: #ffebee; }
+        
+        .stat-number { font-size: 32px; font-weight: bold; margin-bottom: 5px; }
+        .stat-label { color: #666; font-size: 14px; }
+        .stat-hint { color: #999; font-size: 11px; margin-top: 4px; }
+        
+        .download-btn {
+            display: inline-block; margin: 20px 0;
+            padding: 14px 30px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white; text-decoration: none;
+            border-radius: 8px; font-weight: 600;
+            transition: transform 0.2s;
+        }
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .table-container {
+            overflow-x: auto; margin-top: 20px;
+            border-radius: 8px; border: 1px solid #e0e0e0;
+        }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            background: #667eea; color: white;
+            padding: 12px; text-align: left;
+            font-weight: 600; position: sticky; top: 0;
+        }
+        td { padding: 10px; border-bottom: 1px solid #e0e0e0; vertical-align: middle; }
+        tr:hover { background: #f8f9ff; }
+        
+        .preview-cell { width: 100px; }
+        .preview-img {
+            width: 90px; height: 90px;
+            object-fit: cover; border-radius: 6px;
+            cursor: pointer; transition: transform 0.2s;
+            border: 2px solid #e0e0e0;
+        }
+        .preview-img:hover { transform: scale(1.05); border-color: #667eea; }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px; border-radius: 12px;
+            font-size: 12px; font-weight: 600;
+        }
+        .badge.yes { background: #c8e6c9; color: #2e7d32; }
+        .badge.no { background: #ffcdd2; color: #c62828; }
+        
+        /* Модальное окно для просмотра */
+        .modal {
+            display: none;
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            z-index: 1000;
+            justify-content: center; align-items: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            max-width: 90%; max-height: 90%;
+            border-radius: 8px;
+        }
+        .modal-close {
+            position: absolute; top: 20px; right: 30px;
+            color: white; font-size: 40px;
+            cursor: pointer; background: none; border: none;
+        }
+        
+        .empty-state {
+            text-align: center; padding: 40px;
+            color: #888; font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📍 Анализатор табличек с адресами</h1>
+        <p class="subtitle">Загрузите ZIP-архив с фотографиями — программа проверит читаемость адреса</p>
+        
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">Перетащите ZIP-архив сюда или кликните для выбора</div>
+            <div class="upload-hint">Рекомендуется до 100 фотографий в одном архиве</div>
+            <input type="file" id="fileInput" accept=".zip">
+        </div>
+        
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText">Обработка...</div>
+        </div>
+        
+        <div class="error" id="errorBox"></div>
+        
+        <div class="results" id="results">
+            <div class="stats">
+                <div class="stat-card total active" data-filter="all" onclick="filterResults('all', this)">
+                    <div class="stat-number" id="totalCount">0</div>
+                    <div class="stat-label">Всего фото</div>
+                    <div class="stat-hint">клик — показать все</div>
+                </div>
+                <div class="stat-card valid" data-filter="yes" onclick="filterResults('yes', this)">
+                    <div class="stat-number" id="validCount">0</div>
+                    <div class="stat-label">Читаемые</div>
+                    <div class="stat-hint">клик — только эти</div>
+                </div>
+                <div class="stat-card invalid" data-filter="no" onclick="filterResults('no', this)">
+                    <div class="stat-number" id="invalidCount">0</div>
+                    <div class="stat-label">Нечитаемые</div>
+                    <div class="stat-hint">клик — только эти</div>
+                </div>
+            </div>
+            
+            <a href="#" class="download-btn" id="downloadBtn">⬇️ Скачать Excel-отчёт</a>
+            
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Превью</th>
+                            <th>Название файла</th>
+                            <th>Соответствует</th>
+                            <th>Комментарий</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для просмотра фото -->
+    <div class="modal" id="imageModal" onclick="closeModal()">
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+        <img class="modal-content" id="modalImage">
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const results = document.getElementById('results');
+        const errorBox = document.getElementById('errorBox');
+        
+        let allResults = [];
+        let currentTaskId = '';
+        
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) handleFile(e.target.files[0]);
+        });
+        
+        function handleFile(file) {
+            if (!file.name.toLowerCase().endsWith('.zip')) {
+                showError('Пожалуйста, загрузите ZIP-архив');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            progressContainer.style.display = 'block';
+            results.style.display = 'none';
+            errorBox.style.display = 'none';
+            progressFill.style.width = '30%';
+            progressText.textContent = 'Загрузка архива...';
+            
+            fetch('/upload', { method: 'POST', body: formData })
+            .then(response => response.json())
+            .then(data => {
+                progressFill.style.width = '100%';
+                
+                if (data.error) {
+                    showError(data.error);
+                    setTimeout(() => { progressContainer.style.display = 'none'; }, 2000);
+                    return;
+                }
+                
+                progressText.textContent = 'Готово!';
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    showResults(data);
+                }, 500);
+            })
+            .catch(err => {
+                showError('Ошибка соединения: ' + err.message);
+                progressContainer.style.display = 'none';
+            });
+        }
+        
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.style.display = 'block';
+        }
+        
+        function showResults(data) {
+            allResults = data.results;
+            currentTaskId = data.task_id;
+            
+            document.getElementById('totalCount').textContent = data.total;
+            document.getElementById('validCount').textContent = data.valid;
+            document.getElementById('invalidCount').textContent = data.invalid;
+            document.getElementById('downloadBtn').href = data.download_url;
+            
+            // Сбрасываем активную карточку
+            document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
+            document.querySelector('.stat-card.total').classList.add('active');
+            
+            renderTable(allResults);
+            results.style.display = 'block';
+        }
+        
+        function filterResults(filter, card) {
+            document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
+            card.classList.add('active');
+            
+            let filtered;
+            if (filter === 'all') filtered = allResults;
+            else if (filter === 'yes') filtered = allResults.filter(r => r.valid);
+            else filtered = allResults.filter(r => !r.valid);
+            
+            renderTable(filtered);
+        }
+        
+        function renderTable(items) {
+            const table = document.getElementById('resultsTable');
+            table.innerHTML = '';
+            
+            if (items.length === 0) {
+                table.innerHTML = `<tr><td colspan="4" class="empty-state">Нет результатов для отображения</td></tr>`;
+                return;
+            }
+            
+            items.forEach(r => {
+                const row = document.createElement('tr');
+                const badgeClass = r.valid ? 'yes' : 'no';
+                const badgeText = r.valid ? 'Да' : 'Нет';
+                const previewUrl = `/preview/${currentTaskId}/${r.preview}`;
+                
+                row.innerHTML = `
+                    <td class="preview-cell">
+                        <img src="${previewUrl}" class="preview-img" 
+                             onclick="openModal('${previewUrl}')"
+                             onerror="this.style.display='none'">
+                    </td>
+                    <td>${r.filename}</td>
+                    <td><span class="badge ${badgeClass}">${badgeText}</span></td>
+                    <td>${r.comment}</td>
+                `;
+                table.appendChild(row);
+            });
+        }
+        
+        function openModal(src) {
+            document.getElementById('modalImage').src = src;
+            document.getElementById('imageModal').classList.add('active');
+        }
+        
+        function closeModal() {
+            document.getElementById('imageModal').classList.remove('active');
+        }
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+    </script>
+</body>
+</html>
