@@ -1,0 +1,6 @@
+streamlit==1.31.0
+pillow==10.2.0
+pytesseract==0.3.10
+pandas==2.1.4
+openpyxl==3.1.2
+rarfile==4.1
